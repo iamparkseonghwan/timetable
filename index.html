@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>시간표</title>
+<style>
+  :root{
+    --accent: #2563eb;
+    --bg: #f7fafc;
+    --cell-border: #e2e8f0;
+    --card-bg: white;
+  }
+  body{font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", Helvetica, Arial; margin:0; background:var(--bg); color:#0f172a}
+  header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;background:linear-gradient(90deg,#f8fafc,#ffffff);box-shadow:0 1px 0 rgba(0,0,0,.04)}
+  header h1{font-size:1.05rem; margin:0}
+  .controls{display:flex;gap:.5rem;align-items:center}
+  button, .file-input{
+    background:var(--card-bg); border:1px solid var(--cell-border); padding:.45rem .6rem; border-radius:6px; cursor:pointer; font-size:.95rem;
+  }
+  button.primary{background:var(--accent); color:white; border-color:transparent}
+  .container{max-width:1100px;margin:1rem auto;padding:0 1rem}
+  .timetable{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;box-shadow:0 8px 20px rgba(2,6,23,.06)}
+  .timetable th{background:#ffffff;border-bottom:1px solid var(--cell-border);padding:.6rem;text-align:center; font-weight:600; font-size:.95rem}
+  .timetable td{border-bottom:1px solid var(--cell-border);border-right:1px solid var(--cell-border);min-height:56px;padding:.45rem;vertical-align:top}
+  .time-col{background:#FCFCFD;font-weight:600;text-align:center; width:80px; font-size:.9rem}
+  .cell{height:100%;display:block;position:relative;cursor:pointer;padding:.25rem}
+  .event{display:inline-block;padding:.35rem .5rem;border-radius:6px;color:white;font-weight:600;font-size:0.85rem}
+  .meta{display:block;font-size:0.75rem;font-weight:500;margin-top:4px;opacity:0.95}
+  .empty{opacity:.4;color:#94a3b8;font-size:0.85rem}
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(2,6,23,.45);display:none;align-items:center;justify-content:center;z-index:80}
+  .modal{width:100%;max-width:520px;background:var(--card-bg);border-radius:8px;padding:1rem;border:1px solid var(--cell-border)}
+  .row{display:flex;gap:.5rem;margin:.5rem 0}
+  label{display:block;font-size:.85rem;color:#334155;margin-bottom:.25rem}
+  input[type=text], input[type=color], select{width:100%;padding:.45rem;border:1px solid var(--cell-border);border-radius:6px}
+  .actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem}
+  .small{font-size:.85rem;padding:.4rem .6rem}
+  /* responsive */
+  @media (max-width:720px){
+    .time-col{display:none;width:40px}
+    .timetable td, .timetable th{padding:.4rem}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>시간표</h1>
+  <div class="controls">
+    <button id="exportBtn" class="small">내보내기 (JSON)</button>
+    <button id="exportCSV" class="small">내보내기 (CSV)</button>
+    <label class="file-input small" title="JSON 불러오기">
+      불러오기
+      <input id="importFile" type="file" accept="application/json,text/csv" style="display:none"/>
+    </label>
+    <button id="resetBtn" class="small">초기화</button>
+    <button id="printBtn" class="small">인쇄</button>
+  </div>
+</header>
+
+<div class="container">
+  <table class="timetable" id="timetable">
+    <thead>
+      <tr>
+        <th class="time-col">시간</th>
+        <th>월</th>
+        <th>화</th>
+        <th>수</th>
+        <th>목</th>
+        <th>금</th>
+        <th>토</th>
+        <th>일</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <!-- rows 생성됨 -->
+    </tbody>
+  </table>
+  <p style="margin-top:.6rem;color:#475569;font-size:.95rem">셀을 클릭하여 과목을 추가하거나 수정하세요. 변경 내용은 자동으로 저장됩니다.</p>
+</div>
+
+<!-- modal -->
+<div class="overlay" id="overlay" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="modalTitle">과목 추가</h3>
+    <div class="row">
+      <div style="flex:2">
+        <label>과목명</label>
+        <input id="subject" type="text" placeholder="예: 수학" />
+      </div>
+      <div style="flex:1">
+        <label>색상</label>
+        <input id="color" type="color" value="#2563eb" />
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:1">
+        <label>강의실</label>
+        <input id="place" type="text" placeholder="예: 101호" />
+      </div>
+      <div style="flex:1">
+        <label>담당교사</label>
+        <input id="teacher" type="text" placeholder="예: 김철수" />
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.4rem">
+      <div style="font-size:.9rem;color:#64748b" id="timeLabel"></div>
+      <div class="actions">
+        <button id="deleteBtn" class="small" style="background:#fde68a">삭제</button>
+        <button id="closeBtn" class="small">취소</button>
+        <button id="saveBtn" class="small primary">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const days = ['월','화','수','목','금','토','일'];
+  const startHour = 8;
+  const endHour = 19; // 마지막 시간 18:00-19:00 포함
+  const tbody = document.getElementById('tbody');
+  const overlay = document.getElementById('overlay');
+  const subjectEl = document.getElementById('subject');
+  const colorEl = document.getElementById('color');
+  const placeEl = document.getElementById('place');
+  const teacherEl = document.getElementById('teacher');
+  const timeLabel = document.getElementById('timeLabel');
+  const saveBtn = document.getElementById('saveBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const exportCSV = document.getElementById('exportCSV');
+  const importFile = document.getElementById('importFile');
+  const resetBtn = document.getElementById('resetBtn');
+  const printBtn = document.getElementById('printBtn');
+
+  // 키: "요일-HH"
+  function keyOf(day, hour){ return day + '-' + String(hour).padStart(2,'0') }
+
+  function loadData(){ return JSON.parse(localStorage.getItem('timetable-data') || '{}') }
+  function saveData(data){ localStorage.setItem('timetable-data', JSON.stringify(data)) }
+
+  function render(){
+    const data = loadData();
+    tbody.innerHTML = '';
+    for(let h=startHour; h<endHour; h++){
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.className = 'time-col';
+      th.innerText = `${String(h).padStart(2,'0')}:00 - ${String(h+1).padStart(2,'0')}:00`;
+      tr.appendChild(th);
+      for(const day of days){
+        const td = document.createElement('td');
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.day = day;
+        cell.dataset.hour = String(h).padStart(2,'0');
+        cell.addEventListener('click', onCellClick);
+        const k = keyOf(day, h);
+        if(data[k]){
+          const ev = data[k];
+          const badge = document.createElement('div');
+          badge.className = 'event';
+          badge.style.background = ev.color || '#2563eb';
+          badge.textContent = ev.subject || '과목';
+          const meta = document.createElement('span');
+          meta.className = 'meta';
+          meta.textContent = [ev.place || '', ev.teacher || ''].filter(Boolean).join(' · ');
+          cell.appendChild(badge);
+          if(meta.textContent) cell.appendChild(meta);
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = '추가하기';
+          cell.appendChild(empty);
+        }
+        td.appendChild(cell);
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+  }
+
+  let currentKey = null;
+  function onCellClick(e){
+    const target = e.currentTarget;
+    const day = target.dataset.day;
+    const hour = Number(target.dataset.hour);
+    currentKey = keyOf(day, hour);
+    const data = loadData();
+    const ev = data[currentKey] || {};
+    subjectEl.value = ev.subject || '';
+    colorEl.value = ev.color || '#2563eb';
+    placeEl.value = ev.place || '';
+    teacherEl.value = ev.teacher || '';
+    timeLabel.innerText = `${day} ${String(hour).padStart(2,'0')}:00 - ${String(hour+1).padStart(2,'0')}:00`;
+    deleteBtn.style.display = ev.subject ? 'inline-block' : 'none';
+    overlay.style.display = 'flex';
+    overlay.setAttribute('aria-hidden', 'false');
+    subjectEl.focus();
+  }
+
+  function closeModal(){ overlay.style.display='none'; overlay.setAttribute('aria-hidden','true'); currentKey=null; }
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', function(e){ if(e.target === overlay) closeModal(); });
+
+  saveBtn.addEventListener('click', function(){
+    if(!currentKey) return closeModal();
+    const data = loadData();
+    const subj = subjectEl.value.trim();
+    if(!subj){
+      // empty subject => remove
+      delete data[currentKey];
+    } else {
+      data[currentKey] = {
+        subject: subj,
+        color: colorEl.value,
+        place: placeEl.value.trim(),
+        teacher: teacherEl.value.trim()
+      };
+    }
+    saveData(data);
+    render();
+    closeModal();
+  });
+
+  deleteBtn.addEventListener('click', function(){
+    if(!currentKey) return;
+    const data = loadData();
+    delete data[currentKey];
+    saveData(data);
+    render();
+    closeModal();
+  });
+
+  // quick utilities
+  exportBtn.addEventListener('click', () => {
+    const data = loadData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'timetable.json'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  exportCSV.addEventListener('click', () => {
+    const data = loadData();
+    // CSV header: day,hour,subject,place,teacher,color
+    const rows = [['day','hour','subject','place','teacher','color']];
+    Object.keys(data).forEach(k => {
+      const [day, hour] = k.split('-');
+      const ev = data[k];
+      rows.push([day, hour, ev.subject||'', ev.place||'', ev.teacher||'', ev.color||'']);
+    });
+    const csvContent = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'timetable.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  importFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        if(file.type === 'text/csv' || file.name.endsWith('.csv')){
+          // parse CSV
+          const text = ev.target.result;
+          // naive CSV parse
+          const lines = text.split(/\r?\n/).filter(Boolean);
+          const hdr = lines.shift().split(',');
+          const mapping = hdr.map(h => h.replace(/(^"|"$)/g,'').trim());
+          const data = {};
+          for(const line of lines){
+            const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/(^"|"$)/g,'').trim());
+            const obj = {};
+            mapping.forEach((m,i) => obj[m] = (cols[i]||'').replace(/^"|"$/g,''));
+            const k = keyOf(obj.day || '월', Number(obj.hour || 8));
+            data[k] = { subject: obj.subject, place: obj.place, teacher: obj.teacher, color: obj.color || '#2563eb' };
+          }
+          saveData(data);
+        } else {
+          const json = JSON.parse(ev.target.result);
+          saveData(json);
+        }
+        render();
+        alert('불러오기 완료');
+      } catch(err){
+        alert('파일을 읽는 중에 오류가 발생했습니다.');
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  resetBtn.addEventListener('click', () => {
+    if(!confirm('시간표를 초기화하시겠습니까? (복구 불가능)')) return;
+    localStorage.removeItem('timetable-data');
+    render();
+  });
+
+  printBtn.addEventListener('click', () => {
+    window.print();
+  });
+
+  // 샘플 데이터: (초기값)
+  (function seed(){
+    const has = localStorage.getItem('timetable-data');
+    if(!has){
+      const sample = {
+        '월-08':{subject:'수학', place:'101', teacher:'김선생', color:'#ef4444'},
+        '화-10':{subject:'영어', place:'202', teacher:'이선생', color:'#06b6d4'},
+        '수-13':{subject:'프로그래밍', place:'LAB', teacher:'박선생', color:'#10b981'},
+        '목-15':{subject:'체육', place:'체육관', teacher:'조선생', color:'#f97316'},
+        '금-09':{subject:'화학', place:'103', teacher:'정선생', color:'#8b5cf6'}
+      };
+      localStorage.setItem('timetable-data', JSON.stringify(sample));
+    }
+  })();
+
+  render();
+})();
+</script>
+</body>
+</html>
