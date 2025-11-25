@@ -68,8 +68,6 @@
         <th>수</th>
         <th>목</th>
         <th>금</th>
-        <th>토</th>
-        <th>일</th>
       </tr>
     </thead>
     <tbody id="tbody">
@@ -116,9 +114,9 @@
 
 <script>
 (function(){
-  const days = ['월','화','수','목','금','토','일'];
-  const startHour = 8;
-  const endHour = 19; // 마지막 시간 18:00-19:00 포함
+  const days = ['월','화','수','목','금'];
+  const startHour = 9;
+  const endHour = 17; // 마지막 시간 18:00-19:00 포함
   const tbody = document.getElementById('tbody');
   const overlay = document.getElementById('overlay');
   const subjectEl = document.getElementById('subject');
