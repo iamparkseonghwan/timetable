@@ -306,21 +306,6 @@
     window.print();
   });
 
-  // 샘플 데이터: (초기값)
-  (function seed(){
-    const has = localStorage.getItem('timetable-data');
-    if(!has){
-      const sample = {
-        '월-08':{subject:'수학', place:'101', teacher:'김선생', color:'#ef4444'},
-        '화-10':{subject:'영어', place:'202', teacher:'이선생', color:'#06b6d4'},
-        '수-13':{subject:'프로그래밍', place:'LAB', teacher:'박선생', color:'#10b981'},
-        '목-15':{subject:'체육', place:'체육관', teacher:'조선생', color:'#f97316'},
-        '금-09':{subject:'화학', place:'103', teacher:'정선생', color:'#8b5cf6'}
-      };
-      localStorage.setItem('timetable-data', JSON.stringify(sample));
-    }
-  })();
-
   render();
 })();
 </script>
